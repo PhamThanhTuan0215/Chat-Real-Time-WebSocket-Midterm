@@ -129,7 +129,6 @@
         margin: 20px;
         overflow-y: auto;
         top: 20px;
-        left: 20px;
         width: 200px;
         max-width: 200px;
     }
@@ -150,6 +149,12 @@
     #users li.offline {
         color: red;
     }
+
+    #toggleUserList {
+        position: fixed;
+        top: 0px;
+        left: 10px;
+    }
 </style>
 
 <body>
@@ -166,6 +171,7 @@
         <button id="submit-username">OK</button>
     </div>
 
+    <button id="toggleUserList">Hidden</button>
     <div id="user-list">
         <h2>User List</h2>
         <ul id="users"></ul>
@@ -275,6 +281,19 @@
                 users.append(li);
                 li.append(status)
             });
+        });
+
+        const toggleUserList = $('#toggleUserList')
+        $('#toggleUserList').on('click', function () {
+            $('#user-list').toggle();
+
+            if(toggleUserList.text() === 'Hidden') {
+                toggleUserList.text('Show')
+            }
+            else {
+                toggleUserList.text('Hidden')
+            }
+
         });
 
         function updatesSrollTop() {
