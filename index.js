@@ -39,7 +39,7 @@ mongoose.connect(MONGODB_URI, {
 
             socket.on('user connected', (username) => {
                 let dataUpdate = {
-                    userId: socket.id,
+                    connectionId: socket.id,
                     online: true
                 }
                 User.findOneAndUpdate({ username }, dataUpdate)
@@ -49,17 +49,23 @@ mongoose.connect(MONGODB_URI, {
 
                             User.find()
                                 .then(list => {
-                                    console.log(list)
-                                    io.emit('update user list', list);
+                                    list.sort((user1, user2) => {
+                                        if (user1.online === user2.online) {
+                                            return user1.username.localeCompare(user2.username)
+                                        }
+                                        return user2.online - user1.online
+                                    });
+
+                                    io.emit('update user list', list)
                                 })
                                 .catch(e => {
-                                    console.log('Can not update user list: ' + e.message);
+                                    console.log('Can not update user list: ' + e.message)
                                 });
                         }
                         else {
                             let newUser = new User({
                                 username: username,
-                                userId: socket.id,
+                                connectionId: socket.id,
                                 online: true
                             })
                             newUser.save()
@@ -68,10 +74,17 @@ mongoose.connect(MONGODB_URI, {
 
                                     User.find()
                                         .then(list => {
-                                            io.emit('update user list', list);
+                                            list.sort((user1, user2) => {
+                                                if (user1.online === user2.online) {
+                                                    return user1.username.localeCompare(user2.username)
+                                                }
+                                                return user2.online - user1.online;
+                                            })
+
+                                            io.emit('update user list', list)
                                         })
                                         .catch(e => {
-                                            console.log('Can not update user list: ' + e.message);
+                                            console.log('Can not update user list: ' + e.message)
                                         });
                                 })
                                 .catch(e => {
@@ -111,18 +124,25 @@ mongoose.connect(MONGODB_URI, {
                 let dataUpdate = {
                     online: false
                 }
-                User.findOneAndUpdate({ userId: socket.id }, dataUpdate)
+                User.findOneAndUpdate({ connectionId: socket.id }, dataUpdate)
                     .then(user => {
                         if(user) {
-                            io.emit('user disconnected', user);
+                            io.emit('user disconnected', user)
                             console.log('User disconnected: ' + user.username)
 
                             User.find()
                                 .then(list => {
-                                    io.emit('update user list', list);
+                                    list.sort((user1, user2) => {
+                                        if (user1.online === user2.online) {
+                                            return user1.username.localeCompare(user2.username)
+                                        }
+                                        return user2.online - user1.online
+                                    });
+
+                                    io.emit('update user list', list)
                                 })
                                 .catch(e => {
-                                    console.log('Can not update user list: ' + e.message);
+                                    console.log('Can not update user list: ' + e.message)
                                 });
                         }
                     })
@@ -133,10 +153,18 @@ mongoose.connect(MONGODB_URI, {
 
             User.find()
                 .then(users => {
-                    socket.emit('update user list', users);
+
+                    users.sort((user1, user2) => {
+                        if (user1.online === user2.online) {
+                            return user1.username.localeCompare(user2.username)
+                        }
+                        return user2.online - user1.online
+                    });
+
+                    socket.emit('update user list', users)
                 })
                 .catch(e => {
-                    console.log('Can not send user list to new client: ' + e.message);
+                    console.log('Can not send user list to new client: ' + e.message)
                 });
         });
     })

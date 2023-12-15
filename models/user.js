@@ -3,7 +3,7 @@ const Schema = mongoose.Schema
 
 const UserSchema = new Schema({
     username: String,
-    userId: String,
+    connectionId: String,
     online: { type: Boolean, default: false }
 })
 
