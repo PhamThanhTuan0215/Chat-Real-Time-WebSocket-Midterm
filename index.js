@@ -46,6 +46,15 @@ mongoose.connect(MONGODB_URI, {
                     .then(user => {
                         if(user) {
                             io.emit('user connected', user);
+
+                            User.find()
+                                .then(list => {
+                                    console.log(list)
+                                    io.emit('update user list', list);
+                                })
+                                .catch(e => {
+                                    console.log('Can not update user list: ' + e.message);
+                                });
                         }
                         else {
                             let newUser = new User({
@@ -56,6 +65,14 @@ mongoose.connect(MONGODB_URI, {
                             newUser.save()
                                 .then(u => {
                                     io.emit('user connected', u);
+
+                                    User.find()
+                                        .then(list => {
+                                            io.emit('update user list', list);
+                                        })
+                                        .catch(e => {
+                                            console.log('Can not update user list: ' + e.message);
+                                        });
                                 })
                                 .catch(e => {
                                     console.log('Add new user failed: ' + e.message)
@@ -63,14 +80,6 @@ mongoose.connect(MONGODB_URI, {
                         }
                         socket.emit('update username', username);
                         console.log('User connected: ' + username)
-
-                        User.find()
-                            .then(list => {
-                                io.emit('update user list', list);
-                            })
-                            .catch(e => {
-                                console.log('Can not update user list: ' + e.message);
-                            });
                     })
                     .catch(e => {
                         console.log('User connect failed: ' + e.message)
