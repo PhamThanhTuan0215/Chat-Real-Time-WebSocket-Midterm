@@ -12,6 +12,7 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000
 const { MONGODB_URI, DB_NAME } = process.env
+const LINK_WEB = process.env.LINK_WEB || 'http://localhost:' + PORT
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -20,7 +21,7 @@ mongoose.connect(MONGODB_URI, {
     .then(() => {
         const Message = require('./models/message')
         const User = require('./models/user')
-        const httpServer = app.listen(PORT, () => console.log('http://localhost:' + PORT))
+        const httpServer = app.listen(PORT, () => console.log(LINK_WEB))
         const io = socketIO(httpServer)
 
         io.on('connection', (socket) => {
