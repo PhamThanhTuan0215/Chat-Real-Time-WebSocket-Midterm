@@ -149,7 +149,11 @@
         const messages = $('#messages')
         const myUsername = $('#my-username').text()
         const otherUsername = $('#other-username').text()
-        const btnBack = $('#btnBack')
+        let btnBack = $('#btnBack')
+
+        btnBack.click(function () {
+            window.location.href = '/?username=' + encodeURIComponent(myUsername)
+        })
 
         $(document).ready(function () {
             socket.emit('user private connected', myUsername, otherUsername);
