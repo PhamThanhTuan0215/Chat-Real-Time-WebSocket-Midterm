@@ -154,6 +154,10 @@
         top: 0px;
         left: 10px;
     }
+
+    .chat-private-form {
+        display: inline;
+    }
 </style>
 
 <body>
@@ -166,13 +170,13 @@
     </div>
 
     <div id="submit-username-form">
-        <input type="text" id="username-input" placeholder="Enter your username" />
+        <input value="<%= username %>" type="text" id="username-input" placeholder="Enter your username" />
         <button id="submit-username">OK</button>
     </div>
 
     <button id="toggleUserList">Hidden</button>
     <div id="user-list">
-        <h2>User List</h2>
+        <h2>Other Users</h2>
         <ul id="users"></ul>
     </div>
 </body>
@@ -198,8 +202,13 @@
                 if (!name) return
 
                 socket.emit('user connected', name);
-            });
-        });
+            })
+
+            const summitUsernameBtn = $('#submit-username');
+            if ($('#username-input').val() !== '') {
+                summitUsernameBtn.click()
+            }
+        })
 
         form.submit(function (e) {
             e.preventDefault()
@@ -208,7 +217,7 @@
                 input.val('')
             }
             return false
-        });
+        })
 
         socket.on('load messages', function (msgArray) {
             $.each(msgArray, function (index, msg) {
@@ -269,16 +278,35 @@
             users.empty();
 
             userList.forEach((user) => {
-                const li = $('<li>').text(user.username);
+                if (user.username !== username) {
+                    const li = $('<li>').text(user.username)
 
-                if (user.online) {
-                    li.addClass('online')
-                    var status = $('<span>').addClass('status').text(' (online)')
-                } else {
-                    li.addClass('offline')
+                    if (user.online) {
+                        li.addClass('online')
+                        var status = $('<span>').addClass('status').text(' (online)')
+                        li.append(status)
+                    } else {
+                        li.addClass('offline')
+                    }
+
+                    var form = $('<form>').addClass('chat-private-form')
+                    form.attr('action', '/private')
+                    form.attr('method', 'post')
+
+                    var button = $('<button>').addClass('toggleButton').text('Chat')
+
+                    var hiddenInput1 = $('<input>').attr('type', 'hidden').attr('name', 'username1').val(username)
+                    var hiddenInput2 = $('<input>').attr('type', 'hidden').attr('name', 'username2').val(user.username)
+
+                    form.append(button).append(hiddenInput1).append(hiddenInput2)
+
+                    if (username === undefined) {
+                        form.css('display', 'none')
+                    }
+
+                    li.append(form)
+                    users.append(li)
                 }
-                users.append(li);
-                li.append(status)
             });
         });
 
@@ -286,14 +314,14 @@
         $('#toggleUserList').on('click', function () {
             $('#user-list').toggle();
 
-            if(toggleUserList.text() === 'Hidden') {
+            if (toggleUserList.text() === 'Hidden') {
                 toggleUserList.text('Show')
             }
             else {
                 toggleUserList.text('Hidden')
             }
 
-        });
+        })
 
         function updatesSrollTop() {
             messages.scrollTop(messages.prop("scrollHeight"));

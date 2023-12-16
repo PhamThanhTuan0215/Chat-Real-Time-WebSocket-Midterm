@@ -2,12 +2,22 @@ require('dotenv').config()
 const express = require('express')
 const socketIO = require('socket.io')
 const mongoose = require('mongoose')
+const bodyParser = require('body-parser');
 
 const app = express()
 app.set('view engine', 'ejs')
+app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
-    res.render('index')
+    const username = req.query.username || ''
+
+    res.render('index', {username})
+})
+
+app.post('/private', (req, res) => {
+    const { username1, username2 } = req.body
+
+    res.render('private', { myUsername: username1, otherUsername: username2 })
 })
 
 const PORT = process.env.PORT || 3000
@@ -20,13 +30,14 @@ mongoose.connect(MONGODB_URI, {
 })
     .then(() => {
         const Message = require('./models/message')
+        const PrivateMessage = require('./models/private_message')
         const User = require('./models/user')
         const httpServer = app.listen(PORT, () => console.log(LINK_WEB))
         const io = socketIO(httpServer)
 
         io.on('connection', (socket) => {
             Message.find()
-                .populate('user', 'username')
+                .populate('user', 'username') // Refers to the user's username (default: _id)
                 .then(messages => {
                     socket.emit('load messages', messages.map(msg => ({
                         username: msg.user.username,
@@ -44,23 +55,10 @@ mongoose.connect(MONGODB_URI, {
                 }
                 User.findOneAndUpdate({ username }, dataUpdate)
                     .then(user => {
-                        if(user) {
+                        if (user) {
                             io.emit('user connected', user);
 
-                            User.find()
-                                .then(list => {
-                                    list.sort((user1, user2) => {
-                                        if (user1.online === user2.online) {
-                                            return user1.username.localeCompare(user2.username)
-                                        }
-                                        return user2.online - user1.online
-                                    });
-
-                                    io.emit('update user list', list)
-                                })
-                                .catch(e => {
-                                    console.log('Can not update user list: ' + e.message)
-                                });
+                            updateListUser()
                         }
                         else {
                             let newUser = new User({
@@ -72,27 +70,13 @@ mongoose.connect(MONGODB_URI, {
                                 .then(u => {
                                     io.emit('user connected', u);
 
-                                    User.find()
-                                        .then(list => {
-                                            list.sort((user1, user2) => {
-                                                if (user1.online === user2.online) {
-                                                    return user1.username.localeCompare(user2.username)
-                                                }
-                                                return user2.online - user1.online;
-                                            })
-
-                                            io.emit('update user list', list)
-                                        })
-                                        .catch(e => {
-                                            console.log('Can not update user list: ' + e.message)
-                                        });
+                                    updateListUser()
                                 })
                                 .catch(e => {
                                     console.log('Add new user failed: ' + e.message)
                                 })
                         }
                         socket.emit('update username', username);
-                        console.log('User connected: ' + username)
                     })
                     .catch(e => {
                         console.log('User connect failed: ' + e.message)
@@ -126,28 +110,70 @@ mongoose.connect(MONGODB_URI, {
                 }
                 User.findOneAndUpdate({ connectionId: socket.id }, dataUpdate)
                     .then(user => {
-                        if(user) {
-                            io.emit('user disconnected', user)
-                            console.log('User disconnected: ' + user.username)
+                        if (user) {
+                            if (user.busy) {
+                                user.busy = false
+                                user.save()
+                            }
+                            else {
+                                io.emit('user disconnected', user)
 
-                            User.find()
-                                .then(list => {
-                                    list.sort((user1, user2) => {
-                                        if (user1.online === user2.online) {
-                                            return user1.username.localeCompare(user2.username)
-                                        }
-                                        return user2.online - user1.online
-                                    });
-
-                                    io.emit('update user list', list)
-                                })
-                                .catch(e => {
-                                    console.log('Can not update user list: ' + e.message)
-                                });
+                                updateListUser()
+                            }
                         }
                     })
                     .catch(e => {
                         console.log('User disconnected failed: ' + e.message)
+                    })
+            });
+
+            socket.on('user private connected', async (username1, username2) => {
+                let dataUpdate = {
+                    connectionId: socket.id,
+                    online: true,
+                    busy: true
+                }
+                const user1 = await User.findOneAndUpdate({ username: username1 }, dataUpdate)
+                const user2 = await User.findOne({ username: username2 })
+
+                updateListUser()
+
+                PrivateMessage.find({
+                    $or: [
+                        {$and: [{ user1: user1 },{ user2: user2 }]},
+                        {$and: [{ user1: user2 },{ user2: user1 }]}
+                      ]
+                })
+                    .populate('user1', 'username')
+                    .populate('user2', 'username')
+                    .then(privateMessages => {
+                        socket.emit('load private messages', privateMessages.map(msg => ({
+                            username: msg.user1.username,
+                            content: msg.content
+                        })));
+                    })
+                    .catch(e => {
+                        console.log('Can not load all private messages from server: ' + e.message)
+                    })
+            })
+
+            socket.on('chat private message', async (msg, username1, username2) => {
+
+                const user1 = await User.findOne({ username: username1 })
+                const user2 = await User.findOne({ username: username2 })
+
+                let privateMessage = new PrivateMessage({
+                    content: msg,
+                    user1: user1._id,
+                    user2: user2._id
+                })
+                privateMessage.save()
+                    .then(() => {
+                        io.to(user1.connectionId).emit('chat private message', username1, msg)
+                        io.to(user2.connectionId).emit('chat private message', username1, msg)
+                    })
+                    .catch(e => {
+                        console.log('Can not save private message: ' + e.message)
                     })
             });
 
@@ -166,6 +192,23 @@ mongoose.connect(MONGODB_URI, {
                 .catch(e => {
                     console.log('Can not send user list to new client: ' + e.message)
                 });
+
+            function updateListUser() {
+                User.find()
+                    .then(list => {
+                        list.sort((user1, user2) => {
+                            if (user1.online === user2.online) {
+                                return user1.username.localeCompare(user2.username)
+                            }
+                            return user2.online - user1.online
+                        });
+
+                        io.emit('update user list', list)
+                    })
+                    .catch(e => {
+                        console.log('Can not update user list: ' + e.message)
+                    });
+            }
         });
     })
     .catch(e => console.log('Can not connect db server: ' + e.message))
